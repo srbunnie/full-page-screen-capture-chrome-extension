@@ -11,7 +11,12 @@ window.CaptureAPI = (function() {
     //
 
     var matches = ['http://*/*', 'https://*/*', 'ftp://*/*', 'file://*/*'],
-        noMatches = [/^https?:\/\/chrome.google.com\/.*$/];
+        noMatches = [
+            /^https?:\/\/chrome\.google\.com\/.*$/,
+            /^https?:\/\/chromewebstore\.google\.com\/.*$/,
+            /^chrome:\/\/.*$/,
+            /^chrome-extension:\/\/.*$/
+        ];
 
     function isValidUrl(url) {
         // couldn't find a better way to tell if executeScript
@@ -45,54 +50,60 @@ window.CaptureAPI = (function() {
     function capture(data, screenshots, sendResponse, splitnotifier) {
         chrome.tabs.captureVisibleTab(
             null, {format: 'png'}, function(dataURI) {
-                if (dataURI) {
-                    var image = new Image();
-                    image.onload = function() {
-                        data.image = {width: image.width, height: image.height};
-
-                        // given device mode emulation or zooming, we may end up with
-                        // a different sized image than expected, so let's adjust to
-                        // match it!
-                        if (data.windowWidth !== image.width) {
-                            var scale = image.width / data.windowWidth;
-                            data.x *= scale;
-                            data.y *= scale;
-                            data.totalWidth *= scale;
-                            data.totalHeight *= scale;
-                        }
-
-                        // lazy initialization of screenshot canvases (since we need to wait
-                        // for actual image size)
-                        if (!screenshots.length) {
-                            Array.prototype.push.apply(
-                                screenshots,
-                                _initScreenshots(data.totalWidth, data.totalHeight)
-                            );
-                            if (screenshots.length > 1) {
-                                if (splitnotifier) {
-                                    splitnotifier();
-                                }
-                                $('screenshot-count').innerText = screenshots.length;
-                            }
-                        }
-
-                        // draw it on matching screenshot canvases
-                        _filterScreenshots(
-                            data.x, data.y, image.width, image.height, screenshots
-                        ).forEach(function(screenshot) {
-                            screenshot.ctx.drawImage(
-                                image,
-                                data.x - screenshot.left,
-                                data.y - screenshot.top
-                            );
-                        });
-
-                        // send back log data for debugging (but keep it truthy to
-                        // indicate success)
-                        sendResponse(JSON.stringify(data, null, 4) || true);
-                    };
-                    image.src = dataURI;
+                if (chrome.runtime.lastError || !dataURI) {
+                    console.error('captureVisibleTab error:', chrome.runtime.lastError);
+                    sendResponse(false);
+                    return;
                 }
+                var image = new Image();
+                image.onload = function() {
+                    data.image = {width: image.width, height: image.height};
+
+                    // given device mode emulation or zooming, we may end up with
+                    // a different sized image than expected, so let's adjust to
+                    // match it!
+                    if (data.windowWidth !== image.width) {
+                        var scale = image.width / data.windowWidth;
+                        data.x *= scale;
+                        data.y *= scale;
+                        data.totalWidth *= scale;
+                        data.totalHeight *= scale;
+                    }
+
+                    // lazy initialization of screenshot canvases (since we need to wait
+                    // for actual image size)
+                    if (!screenshots.length) {
+                        Array.prototype.push.apply(
+                            screenshots,
+                            _initScreenshots(data.totalWidth, data.totalHeight)
+                        );
+                        if (screenshots.length > 1) {
+                            if (splitnotifier) {
+                                splitnotifier();
+                            }
+                            $('screenshot-count').innerText = screenshots.length;
+                        }
+                    }
+
+                    // draw it on matching screenshot canvases
+                    _filterScreenshots(
+                        data.x, data.y, image.width, image.height, screenshots
+                    ).forEach(function(screenshot) {
+                        screenshot.ctx.drawImage(
+                            image,
+                            data.x - screenshot.left,
+                            data.y - screenshot.top
+                        );
+                    });
+
+                    // send back log data for debugging (but keep it truthy to
+                    // indicate success)
+                    sendResponse(JSON.stringify(data, null, 4) || true);
+                };
+                image.onerror = function() {
+                    sendResponse(false);
+                };
+                image.src = dataURI;
             });
     }
 
@@ -190,29 +201,22 @@ window.CaptureAPI = (function() {
     function saveBlob(blob, filename, index, callback, errback) {
         filename = _addFilenameSuffix(filename, index);
 
-        function onwriteend() {
-            // open the file that now contains the blob - calling
-            // `openPage` again if we had to split up the image
-            var urlName = ('filesystem:chrome-extension://' +
-                           chrome.i18n.getMessage('@@extension_id') +
-                           '/temporary/' + filename);
-
-            callback(urlName);
-        }
-
-        // come up with file-system size with a little buffer
-        var size = blob.size + (1024 / 2);
-
-        // create a blob for writing to a file
-        var reqFileSystem = window.requestFileSystem || window.webkitRequestFileSystem;
-        reqFileSystem(window.TEMPORARY, size, function(fs){
-            fs.root.getFile(filename, {create: true}, function(fileEntry) {
-                fileEntry.createWriter(function(fileWriter) {
-                    fileWriter.onwriteend = onwriteend;
-                    fileWriter.write(blob);
-                }, errback); // TODO - standardize error callbacks?
-            }, errback);
-        }, errback);
+        var reader = new FileReader();
+        reader.onloadend = function() {
+            var dataUrl = reader.result;
+            var storageKey = 'capture_' + Date.now() + '_' + index;
+            var dataToStore = {};
+            dataToStore[storageKey] = {
+                dataUrl: dataUrl,
+                filename: filename
+            };
+            chrome.storage.local.set(dataToStore, function() {
+                var urlName = chrome.runtime.getURL('show.html?key=' + storageKey);
+                callback(urlName);
+            });
+        };
+        reader.onerror = errback;
+        reader.readAsDataURL(blob);
     }
 
 
@@ -260,10 +264,13 @@ window.CaptureAPI = (function() {
             }
         });
 
-        chrome.tabs.executeScript(tab.id, {file: 'page.js'}, function() {
+        chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['page.js']
+        }, function() {
             if (timedOut) {
                 console.error('Timed out too early while waiting for ' +
-                              'chrome.tabs.executeScript. Try increasing the timeout.');
+                              'chrome.scripting.executeScript. Try increasing the timeout.');
             } else {
                 loaded = true;
                 progress(0);

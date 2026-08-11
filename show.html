@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Screen Capture Result</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #121214;
+      color: #e1e1e6;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    header {
+      width: 100%;
+      background: #1e1e24;
+      border-bottom: 1px solid #2e2e38;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 16px;
+      color: #fff;
+    }
+    .brand img {
+      width: 24px;
+      height: 24px;
+    }
+    .filename {
+      font-size: 13px;
+      color: #a0a0b0;
+      background: #282832;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: monospace;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #4f46e5;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      transition: background 0.2s ease, transform 0.1s ease;
+      cursor: pointer;
+      border: none;
+    }
+    .btn:hover {
+      background: #4338ca;
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+    main {
+      padding: 24px;
+      max-width: 100%;
+      display: flex;
+      justify-content: center;
+      flex: 1;
+    }
+    .img-container {
+      background: #1a1a20;
+      padding: 12px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    img#screenshot {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    #error-msg {
+      padding: 40px;
+      color: #f87171;
+      font-size: 16px;
+      font-weight: 500;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="icon48-999.png" alt="Logo">
+      Full Page Screen Capture
+    </div>
+    <div class="filename" id="filename-title">screenshot.png</div>
+    <div class="actions">
+      <a id="download-btn" class="btn" download="screenshot.png">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+        </svg>
+        Download Image
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <div id="error-msg">Screenshot not found or expired.</div>
+    <div class="img-container" id="img-container">
+      <img id="screenshot" alt="Full Page Screenshot">
+    </div>
+  </main>
+
+  <script src="show.js"></script>
+</body>
+</html>
